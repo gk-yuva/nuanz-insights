@@ -70,11 +70,11 @@
     /* Portfolio Analysis Grid */
     .analysis-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 24px;
       margin: 24px 0;
       width: 100%;
-      max-width: 1200px;
+      max-width: 1400px;
       margin-left: auto;
       margin-right: auto;
     }
@@ -213,6 +213,10 @@
     footer{margin-top:48px;padding-top:24px;border-top:1px solid #334155;color:#64748B;font-size:13px;text-align:center}
     footer a{color:#10B981;text-decoration:none}
 
+    @media (max-width:1200px){
+      .analysis-grid{grid-template-columns:1fr 1fr;gap:20px}
+    }
+    
     @media (max-width:768px){
       .navbar{padding:12px 16px;flex-wrap:wrap}
       .nav-menu{display:none}
@@ -225,6 +229,7 @@
       .top-movers{flex-direction:column;gap:16px}
       .sentiment-counts{flex-direction:column;gap:12px}
       .sentiment-grid{grid-template-columns:1fr}
+      .analysis-grid{grid-template-columns:1fr;gap:16px}
     }
   </style>
 </head>
@@ -390,6 +395,43 @@
           </div>
         </div>
       </section>
+
+      <!-- Help Me Hedge -->
+      <section id="hedge-analysis" class="hedge-analysis compact-pane">
+        <div class="section-header">
+          <h3 style="font-size: 20px; margin-bottom: 16px; color: #f8fafc;">Help Me Hedge</h3>
+          <div class="hedge-subtitle" style="color: #94a3b8; font-size: 14px; margin-bottom: 20px;">
+            Portfolio risk scenarios & hedging opportunities
+          </div>
+        </div>
+        
+        <!-- Shock Scenarios Summary -->
+        <div class="shock-scenarios" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+          <div class="shock-card" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="color: #ef4444; font-size: 12px; font-weight: 600; margin-bottom: 4px;">5% DECLINE</div>
+            <div id="shock-5-value" style="color: #e2e8f0; font-size: 16px; font-weight: 600;">-₹15,161</div>
+            <div style="color: #94a3b8; font-size: 11px;">Portfolio Impact</div>
+          </div>
+          <div class="shock-card" style="background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.2); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="color: #dc2626; font-size: 12px; font-weight: 600; margin-bottom: 4px;">10% DECLINE</div>
+            <div id="shock-10-value" style="color: #e2e8f0; font-size: 16px; font-weight: 600;">-₹30,322</div>
+            <div style="color: #94a3b8; font-size: 11px;">Portfolio Impact</div>
+          </div>
+        </div>
+
+        <!-- Chart Container -->
+        <div class="hedge-chart-container" style="height: 200px; margin-bottom: 16px; background: rgba(15, 23, 42, 0.5); border: 1px solid #334155; border-radius: 8px; padding: 12px;">
+          <canvas id="hedge-chart" width="100%" height="100%"></canvas>
+        </div>
+
+        <!-- Hedge Suggestions -->
+        <div class="hedge-suggestions" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 12px;">
+          <div style="color: #10b981; font-size: 12px; font-weight: 600; margin-bottom: 6px;">💡 HEDGE RECOMMENDATIONS</div>
+          <div id="hedge-recommendations" style="color: #e2e8f0; font-size: 12px; line-height: 1.4;">
+            Loading hedging strategies...
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- Portfolio snapshot area -->
@@ -417,6 +459,9 @@
       <div style="margin-top:6px">© 2025 Nuanz. All rights reserved.</div>
     </footer>
   </div>
+
+  <!-- Chart.js for portfolio hedge visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
 
   <script>
     console.log('🚀 JavaScript loading...');
@@ -507,11 +552,8 @@
           const el = document.getElementById('sentiment-value');
           el.innerHTML = s.summary + (s.score ? `<small> (${s.score})</small>` : '');
         } else {
-          // Mock data for demo
-          setTimeout(() => {
-            const el = document.getElementById('sentiment-value');
-            el.innerHTML = 'Mostly Positive <small>(+8.2% today)</small>';
-          }, 2000);
+          // Load real P&L data
+          loadPortfolioPL();
         }
       })();
 
@@ -871,8 +913,62 @@
         }
       })();
       
+      // Load portfolio P&L data
+      async function loadPortfolioPL() {
+        try {
+          console.log('💰 Loading portfolio P&L...');
+          const response = await fetch('http://localhost:5000/api/portfolio/pl');
+          
+          if (response.ok) {
+            const plData = await response.json();
+            updateSentimentWithPL(plData);
+          } else {
+            console.warn('P&L API failed, using fallback');
+            updateSentimentWithPL(null);
+          }
+        } catch (error) {
+          console.warn('P&L API unavailable:', error);
+          updateSentimentWithPL(null);
+        }
+      }
+      
+      // Update sentiment display with P&L data
+      function updateSentimentWithPL(plData) {
+        const sentimentEl = document.getElementById('sentiment-value');
+        
+        if (sentimentEl) {
+          if (plData && plData.status !== 'error') {
+            const plText = plData.formatted_pl.display_text;
+            const plSign = plData.formatted_pl.sign;
+            const sentiment = plSign === '+' ? 'Positive' : 'Negative';
+            const color = plSign === '+' ? '#10b981' : '#ef4444';
+            
+            sentimentEl.innerHTML = `
+              <span style="color: ${color};">${sentiment}</span> 
+              <small style="color: #94a3b8;">(${plText})</small>
+            `;
+            
+            // Also update the portfolio value if there's a display element
+            const portfolioValueEl = document.getElementById('portfolio-current-value');
+            if (portfolioValueEl) {
+              portfolioValueEl.textContent = `₹${plData.portfolio_value.current.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            }
+            
+            console.log('✅ P&L data loaded successfully:', plData.formatted_pl.display_text);
+            
+          } else {
+            // Fallback display
+            sentimentEl.innerHTML = 'Mostly Positive <small>(P&L data unavailable)</small>';
+            console.warn('⚠️ Using fallback P&L display');
+          }
+        }
+      }
+      
       // Load risk analysis
       loadRiskAnalysis();
+      
+      // Load hedge analysis
+      loadHedgeAnalysis();
       
       // Load sentiment tracker data
       function loadSentimentTracker(data) {
@@ -1075,6 +1171,203 @@
           ]
         };
         populateRiskAnalysis(mockRiskData);
+      }
+
+      // Hedge Analysis Functions
+      async function loadHedgeAnalysis() {
+        try {
+          const response = await fetch('http://localhost:5000/api/portfolio/hedge-analysis');
+          
+          if (response.ok) {
+            const hedgeData = await response.json();
+            console.log('✅ Hedge analysis data loaded:', hedgeData);
+            populateHedgeAnalysis(hedgeData);
+          } else {
+            console.warn('⚠️ Hedge analysis API unavailable, loading mock data');
+            loadMockHedgeData();
+          }
+        } catch (error) {
+          console.warn('⚠️ Hedge analysis failed, using mock data:', error);
+          loadMockHedgeData();
+        }
+      }
+
+      function populateHedgeAnalysis(data) {
+        if (data.status !== 'success') {
+          console.error('❌ Hedge analysis data error:', data.message);
+          return;
+        }
+
+        // Update shock scenario values
+        const shock5El = document.getElementById('shock-5-value');
+        const shock10El = document.getElementById('shock-10-value');
+        
+        if (shock5El) {
+          shock5El.textContent = `-${data.shock_scenarios.shock_5.formatted_impact}`;
+        }
+        
+        if (shock10El) {
+          shock10El.textContent = `-${data.shock_scenarios.shock_10.formatted_impact}`;
+        }
+
+        // Update hedge recommendations
+        const recommendationsEl = document.getElementById('hedge-recommendations');
+        if (recommendationsEl && data.hedge_recommendations) {
+          recommendationsEl.innerHTML = data.hedge_recommendations
+            .slice(0, 2) // Show top 2 recommendations
+            .map(rec => `• ${rec}`)
+            .join('<br>');
+        }
+
+        // Create the hedge chart
+        createHedgeChart(data.historical_data);
+      }
+
+      function createHedgeChart(historicalData) {
+        const ctx = document.getElementById('hedge-chart');
+        if (!ctx || !historicalData) {
+          console.warn('⚠️ Chart canvas or data not available');
+          return;
+        }
+
+        // Destroy existing chart if it exists
+        if (window.hedgeChart instanceof Chart) {
+          window.hedgeChart.destroy();
+        }
+
+        const labels = historicalData.map(d => d.month);
+        const normalData = historicalData.map(d => d.normal_value);
+        const shock5Data = historicalData.map(d => d.shock_5_value);
+        const shock10Data = historicalData.map(d => d.shock_10_value);
+
+        window.hedgeChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Normal Portfolio',
+                data: normalData,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                borderWidth: 2
+              },
+              {
+                label: '5% Shock',
+                data: shock5Data,
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.4,
+                borderWidth: 1.5,
+                borderDash: [5, 5]
+              },
+              {
+                label: '10% Shock',
+                data: shock10Data,
+                borderColor: '#dc2626',
+                backgroundColor: 'rgba(220, 38, 38, 0.1)', 
+                tension: 0.4,
+                borderWidth: 1.5,
+                borderDash: [10, 5]
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              intersect: false,
+              mode: 'index'
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                  color: '#e2e8f0',
+                  font: { size: 11 },
+                  usePointStyle: true,
+                  padding: 15
+                }
+              },
+              tooltip: {
+                backgroundColor: '#1e293b',
+                titleColor: '#e2e8f0',
+                bodyColor: '#e2e8f0',
+                borderColor: '#334155',
+                borderWidth: 1,
+                callbacks: {
+                  label: function(context) {
+                    return `${context.dataset.label}: ₹${context.parsed.y.toLocaleString()}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                display: true,
+                grid: { color: '#334155', borderColor: '#475569' },
+                ticks: { color: '#94a3b8', font: { size: 10 } }
+              },
+              y: {
+                display: true,
+                grid: { color: '#334155', borderColor: '#475569' },
+                ticks: { 
+                  color: '#94a3b8',
+                  font: { size: 10 },
+                  callback: function(value) {
+                    return '₹' + (value / 1000).toFixed(0) + 'k';
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      function loadMockHedgeData() {
+        console.log('📊 Loading mock hedge analysis data');
+        
+        // Generate mock historical data
+        const mockHistoricalData = [];
+        const currentValue = 234170;
+        
+        for (let i = 11; i >= 0; i--) {
+          const date = new Date();
+          date.setMonth(date.getMonth() - i);
+          
+          const baseValue = currentValue * (0.8 + (11-i) * 0.02);
+          const volatility = Math.random() * 0.1 - 0.05;
+          const normalValue = baseValue * (1 + volatility);
+          
+          mockHistoricalData.push({
+            month: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+            normal_value: normalValue,
+            shock_5_value: normalValue * 0.95,
+            shock_10_value: normalValue * 0.90
+          });
+        }
+        
+        const mockHedgeData = {
+          status: 'success',
+          shock_scenarios: {
+            shock_5: {
+              formatted_impact: '15,161'
+            },
+            shock_10: {
+              formatted_impact: '30,322'
+            }
+          },
+          historical_data: mockHistoricalData,
+          hedge_recommendations: [
+            'Consider NIFTY put options for downside protection',
+            'Increase allocation to defensive sectors',
+            'Maintain cash reserves for market opportunities'
+          ]
+        };
+        
+        populateHedgeAnalysis(mockHedgeData);
       }
 
       function updateAIStatus(method) {

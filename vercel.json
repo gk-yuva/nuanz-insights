@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "builds": [
     {
       "src": "*.html",
@@ -9,10 +10,21 @@
       "use": "@vercel/static"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/",
-      "dest": "/ai-dashboard.html"
+      "source": "/dashboard",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
     }
   ]
 }
